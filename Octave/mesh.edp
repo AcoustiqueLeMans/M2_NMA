@@ -1,0 +1,24 @@
+real rayon; 
+real epaisseur;
+int nelementrayon;
+int nelementepaisseur;
+
+ifstream entree("mesh.inp");
+entree >> rayon;
+entree >> epaisseur;
+entree >> nelementrayon;
+entree >> nelementepaisseur;
+
+
+
+border bottom(t=0,1){ x=rayon*t; y=0;}
+border right(t=0,1){ x=rayon; y=(epaisseur)*t;}
+border top(t=0,1){x=rayon*(1-t); y=epaisseur;}
+border left(t=0,1){x=0; y=(1-t)*(epaisseur);}
+
+mesh Th = buildmesh (bottom(nelementrayon)+right(nelementepaisseur)+top(nelementrayon)+left(nelementepaisseur));
+//plot(Th,ps="inpam.eps",bw=1);
+
+savemesh(Th,"mesh.msh");
+
+
