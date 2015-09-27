@@ -1,0 +1,133 @@
+//   Program tuning_fork.edp
+//
+//   Copyright (C) 2014 LAUM UMR CNRS 6613 (France)
+// 	   Olivier DAZEL <olivier.dazel@univ-lemans.fr>
+//     Antonin TRIBALEAU <antonin.tribaleau@univ-lemans.fr>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+//
+// This program computes the vibroacoustic response of a tuning fork. 
+// It is a part of the course
+// "Numerical Methods in Acoustics and Vibration"
+//  given for students of the MSc Master Program in Acoustics and
+//  IMDEA students
+
+
+// Frequency vector
+int nbpt = 40;
+real fmin = 10, fmax = 5000;
+
+// Property of the fluid
+real  rhof = 1.2, cel = 344;
+
+// Property of the tuning fork
+real  rhoS = 7800.,
+      E = 210e9,
+      nu = 0.3,
+      lambda = (nu*E)/((1+nu)*(1-2*nu)),
+      mu = E / (2*(1+nu));
+
+complex eta = 1. + 0.01*1i;      
+
+real nbe = 150; // 
+
+// Dimension of the tuning fork
+real  l1 = 0.05, // Longueur branches
+      l2 = 0.02, // longueur pied
+      d = 0.005, // diamètre
+      r1 = 0.005, // Rayon int.
+      r2 = r1+d; // Rayon ext.
+
+border aa(t=0,1){ x=0 ; y=l2*t ; label=1;}
+border bb(t=-pi/2,-pi){ x=r2*cos(t) ; y=r2*sin(t) + l2+r2; label=1;}
+border cc(t=0,1){ x=-r2 ; y=l1*t+l2+r2 ; label=1;}
+border dd(t=0,1){ x=d*t-r2 ; y=l1+l2+r2 ; label=1;}
+border ee(t=1,0){ x=-(r2-r1) ; y=l1*t+l2+r2 ; label=1;}
+border ff(t=-pi,-pi/2){ x=r1*cos(t) ; y=r1*sin(t) + l2+r2; label=1;}
+border gg(t=0,1){ x=d*t ; y=l2+r2-r1 ; label=1;}
+border hh(t=-pi/2,0){ x=r1*cos(t)+d ; y=r1*sin(t) + l2+r2; label=1;}
+border ii(t=0,1){ x=d+r1 ; y=l1*t+l2+r2 ; label=1;}
+border jj(t=0,1){ x=d*t+d+r1 ; y=l1+l2+r2 ; label=10;} // Force exc.
+border kk(t=1,0){ x=2*d+r1 ; y=l1*t+l2+r2 ; label=1;}
+border ll(t=0,-pi/2){ x=r2*cos(t)+d ; y=r2*sin(t) + l2+r2; label=1;}
+border mm(t=1,0){ x=d ; y=l2*t ; label=1;}
+border nn(t=1,0){ x=d*t ; y=0. ; label=20;} // Encastrement
+
+mesh ThS = buildmesh(aa(-ceil(nbe*l2))+bb(-ceil(nbe*0.5*pi*r2))+cc(-ceil(nbe*l1))+dd(-ceil(nbe*d))+ee(-ceil(nbe*l1))+ff(-ceil(nbe*0.5*pi*r1))+gg(-ceil(nbe*d))+hh(-ceil(nbe*0.5*pi*r1))+ii(-ceil(nbe*l1))+jj(-ceil(nbe*d))+kk(-ceil(nbe*l1))+ll(-ceil(nbe*0.5*pi*r2))+mm(-ceil(nbe*l2))+nn(-ceil(nbe*d)),fixeborder=true);//f1(10),f2(10),f3(10),f4(10)
+                     
+plot(ThS,wait=true);
+
+// Macro
+
+macro e(u1,u2) [dx(u1),dy(u2),(dy(u1)+dx(u2)) ] //
+macro CISO [ [ lambda+2*mu , lambda , 0],
+          [ lambda , lambda+2*mu , 0],
+          [ 0 , 0 , mu ]] //
+// Finite-Element discretization spaces
+fespace VhS(ThS,[P2,P2]);
+fespace VhSs(ThS,P2);
+VhSs<complex> u1,u2;
+
+
+real[int] floglin(nbpt);
+{
+//ofstream fre("FREQ.txt");
+for(int ii=0; ii<nbpt; ii++){
+    floglin(ii) = fmin*10^((ii*(log10(fmax)-log10(fmin))/(nbpt-1))); // Répartition log.
+    floglin(ii) = fmin+(ii*((fmax-fmin)/(nbpt-1)));
+}
+}
+
+for(int ii=0; ii<nbpt; ii++){// frequency in Hz 
+
+  real omega = 2.*pi*floglin(ii); // pulsation
+
+  // Weak form of the solid phase
+  varf km([u1,u2],[uk1,uk2]) =	int2d(ThS)(((CISO*e(u1,u2))'*e(uk1,uk2))*eta) 
+					                    - int2d(ThS)((omega^2.)*rhoS*(u1*uk1+u2*uk2)) 
+                    				  	+ on(20,u1=0.,u2=0.); // Encastrement;
+  // Weak form of the force
+
+  varf force([u1,u2],[uk1,uk2]) =	int1d(ThS,10)(uk1); // force along x
+
+ 
+  matrix<complex> KM =	km(VhS,VhS);
+ 
+  matrix<complex> M = KM;
+  set(M,solver=sparsesolver);
+
+  complex[int] Fint = force(0,VhS); 
+  complex[int] F( VhS.ndof) ; F = 0; for(int n=0; n<Fint.n; n++){F[n] = Fint(n);}; 
+
+  complex[int] UP( VhS.ndof ); UP = 0.; // Solution vector
+  UP = M^-1*F;
+
+  for(int n=0; n<VhS.ndof/2; n++){ 
+    u1[](n) = UP[2*n];
+	u2[](n) = UP[2*n+1];
+  }
+	   
+
+  real coef = 0.005/abs(u1[].linfty);
+  mesh Thm = movemesh(ThS, [x+real(u1)*coef-0.05, y+real(u2)*coef]);
+  	
+
+  VhSs u;	
+
+  u=sqrt(abs(u1)^2);
+
+  plot(u,Thm,fill=true,nbiso=20,value=true,wait=false);
+  
+}
+

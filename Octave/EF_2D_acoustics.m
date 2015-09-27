@@ -30,14 +30,14 @@ clc
 
 % Boolean values to indicate if we plot or not the mesh and the modes
 
-plot_mesh=1;
-plot_modes=1;
+plot_mesh=0;
+plot_modes=0;
 nb_mode_plot=2; % # of the mode whic is plot
 
 
 % Type of the element, 1 for linear and 2 for quadratic
 
-typ_elem=1;
+typ_elem=2;
 
 % Dimension of the domain
 
@@ -46,12 +46,12 @@ L_y=1e-1;
 
 % Number of elements in each direction
 
-nb_element_x=20;
-nb_element_y=2;
+nb_element_x=10;
+nb_element_y=1;
 
 % Number of modes to be computed
 
-nb_frequency=5;
+nb_frequency=25;
 
 %  Physical parameters
 
@@ -98,20 +98,28 @@ end
 
 [P_modes lambda]=eigs(H_global/rho_0,Q_global/(rho_0*c_0^2),nb_frequency,'sm');
 
-frequency_FEM=sqrt(diag(lambda))/(2*pi)
+frequency_FEM=sqrt(diag(lambda))/(2*pi);
 
-frequency_theory=[0:nb_frequency-1]'*sqrt(c_0^2*pi^2/L_x^2)/(2*pi);
+
+for nn=0:nb_frequency-1
+   for mm=0:nb_frequency-1
+      k_theory(nn+1,mm+1)=sqrt((nn*pi/L_x)^2+(mm*pi/L_y)^2); 
+   end
+end
+
+k_theory=reshape(k_theory,[nb_frequency*nb_frequency,1]);
+k_theory=sort(k_theory)';
+k_theory=k_theory(1:nb_frequency)';
+frequency_theory=c_0*k_theory/(2*pi);
 
 disp('Result of the calculation')
 disp('[FEM Theory Error]')
 
-
-[temp i_sort]=sort(frequency_FEM);
+[temp, i_sort]=sort(frequency_FEM);
 frequency_FEM=frequency_FEM(i_sort);
 P_modes(:,:)=P_modes(:,i_sort);
 
-[(frequency_FEM) sort(frequency_theory) sort(frequency_FEM)-sort(frequency_theory)]
-
+%[(frequency_FEM) frequency_theory) sort(frequency_FEM)-sort(frequency_theory)]
 
 if plot_modes==1
     if typ_elem==1
@@ -127,3 +135,8 @@ if plot_modes==1
         colorbar
     end
 end
+
+figure
+plot(sort(frequency_theory),'r+')
+hold on
+plot(frequency_FEM,'b.')

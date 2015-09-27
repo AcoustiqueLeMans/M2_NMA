@@ -216,7 +216,7 @@ for(int ii=0; ii<nbpt; ii++){// frequency in Hz
   real coef = 0.005/abs(u1[].linfty);
   mesh Thm = movemesh(ThS, [x+real(u1)*coef, y+real(u2)*coef]);
 
-  ppw = real(p);
+  ppw = abs(p);
   plot(ppw,Thm,fill=true,nbiso=20,value=true,wait=false);
 
 
