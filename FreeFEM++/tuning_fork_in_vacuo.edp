@@ -17,37 +17,39 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //
-// This program computes the vibroacoustic response of a tuning fork. 
+// This program computes the vibroacoustic response of atuning fork. 
 // It is a part of the course
 // "Numerical Methods in Acoustics and Vibration"
 //  given for students of the MSc Master Program in Acoustics and
 //  IMDEA students
 
 
+
 // Frequency vector
-int nbpt = 40;
-real fmin = 10, fmax = 5000;
+int nbfrq = 100;
+real fmin = 100, fmax = 600;
 
-// Property of the fluid
-real  rhof = 1.2, cel = 344;
+real normu ;
+string namefile;
 
-// Property of the tuning fork
+
+// Property of the tuning fork (Steel)
 real  rhoS = 7800.,
-      E = 210e9,
-      nu = 0.3,
+      E = 200e9,
+      nu = 0.2,
       lambda = (nu*E)/((1+nu)*(1-2*nu)),
       mu = E / (2*(1+nu));
 
 complex eta = 1. + 0.01*1i;      
 
-real nbe = 150; // 
+real nbe = 300; // 
 
 // Dimension of the tuning fork
-real  l1 = 0.05, // Longueur branches
-      l2 = 0.02, // longueur pied
-      d = 0.005, // diamètre
-      r1 = 0.005, // Rayon int.
-      r2 = r1+d; // Rayon ext.
+real  l1 = 0.08, // Length of the branches
+      l2 = 0.03, // length of the foot
+      d =  0.0045, // thickness of the branch
+      r1 = 0.0045, // Internal radius.
+      r2 = r1+d; // External radius.
 
 border aa(t=0,1){ x=0 ; y=l2*t ; label=1;}
 border bb(t=-pi/2,-pi){ x=r2*cos(t) ; y=r2*sin(t) + l2+r2; label=1;}
@@ -58,50 +60,58 @@ border ff(t=-pi,-pi/2){ x=r1*cos(t) ; y=r1*sin(t) + l2+r2; label=1;}
 border gg(t=0,1){ x=d*t ; y=l2+r2-r1 ; label=1;}
 border hh(t=-pi/2,0){ x=r1*cos(t)+d ; y=r1*sin(t) + l2+r2; label=1;}
 border ii(t=0,1){ x=d+r1 ; y=l1*t+l2+r2 ; label=1;}
-border jj(t=0,1){ x=d*t+d+r1 ; y=l1+l2+r2 ; label=10;} // Force exc.
+border jj(t=0,1){ x=d*t+d+r1 ; y=l1+l2+r2 ; label=10;} // Excitation
 border kk(t=1,0){ x=2*d+r1 ; y=l1*t+l2+r2 ; label=1;}
 border ll(t=0,-pi/2){ x=r2*cos(t)+d ; y=r2*sin(t) + l2+r2; label=1;}
 border mm(t=1,0){ x=d ; y=l2*t ; label=1;}
-border nn(t=1,0){ x=d*t ; y=0. ; label=20;} // Encastrement
+border nn(t=1,0){ x=d*t ; y=0. ; label=20;} // Clamped edge
+                  
 
 mesh ThS = buildmesh(aa(-ceil(nbe*l2))+bb(-ceil(nbe*0.5*pi*r2))+cc(-ceil(nbe*l1))+dd(-ceil(nbe*d))+ee(-ceil(nbe*l1))+ff(-ceil(nbe*0.5*pi*r1))+gg(-ceil(nbe*d))+hh(-ceil(nbe*0.5*pi*r1))+ii(-ceil(nbe*l1))+jj(-ceil(nbe*d))+kk(-ceil(nbe*l1))+ll(-ceil(nbe*0.5*pi*r2))+mm(-ceil(nbe*l2))+nn(-ceil(nbe*d)),fixeborder=true);//f1(10),f2(10),f3(10),f4(10)
                      
-plot(ThS,wait=true);
+//plot(ThS,wait=true);
 
 // Macro
 
-macro e(u1,u2) [dx(u1),dy(u2),(dy(u1)+dx(u2)) ] //
-macro CISO [ [ lambda+2*mu , lambda , 0],
+macro e(ux,uy) [dx(ux),dy(uy),(dy(ux)+dx(uy)) ] //
+macro Hooke [ [ lambda+2*mu , lambda , 0],
           [ lambda , lambda+2*mu , 0],
           [ 0 , 0 , mu ]] //
 // Finite-Element discretization spaces
 fespace VhS(ThS,[P2,P2]);
+VhS [ux,uy],[uxtest,uytest];
+
 fespace VhSs(ThS,P2);
-VhSs<complex> u1,u2;
+VhSs<complex> ux1,uy2;
+VhSs<complex> u;
 
 
-real[int] floglin(nbpt);
+// /*
+
+ofstream res("normu2_invacuo.txt");
+
+real[int] freq(nbfrq);
 {
-//ofstream fre("FREQ.txt");
-for(int ii=0; ii<nbpt; ii++){
-    floglin(ii) = fmin*10^((ii*(log10(fmax)-log10(fmin))/(nbpt-1))); // Répartition log.
-    floglin(ii) = fmin+(ii*((fmax-fmin)/(nbpt-1)));
+
+for(int ii=0; ii<nbfrq; ii++){
+    freq(ii) = fmin+(ii*((fmax-fmin)/(nbfrq-1)));
 }
 }
 
-for(int ii=0; ii<nbpt; ii++){// frequency in Hz 
-
-  real omega = 2.*pi*floglin(ii); // pulsation
+for(int ii=0; ii<nbfrq; ii++){// frequency in Hz 
+  cout << "Progress=" << 100*ii/nbfrq << "%" << endl;		
+  real omega = 2.*pi*freq(ii); // pulsation
 
   // Weak form of the solid phase
-  varf km([u1,u2],[uk1,uk2]) =	int2d(ThS)(((CISO*e(u1,u2))'*e(uk1,uk2))*eta) 
-					                    - int2d(ThS)((omega^2.)*rhoS*(u1*uk1+u2*uk2)) 
-                    				  	+ on(20,u1=0.,u2=0.); // Encastrement;
+  
+    varf km([ux,uy],[uxtest,uytest]) =	int2d(ThS)(((Hooke*e(ux,uy))'*e(uxtest,uytest))*eta) 
+					                    - int2d(ThS)((omega^2.)*rhoS*(ux*uxtest+uy*uytest)) 
+                    				  	+ on(20,ux=0.,uy=0.); // Encastrement;
+    
   // Weak form of the force
 
-  varf force([u1,u2],[uk1,uk2]) =	int1d(ThS,10)(uk1); // force along x
+  varf force([ux,uy],[uxtest,uytest]) =	int1d(ThS,10)( freq(ii)*uxtest); // force along x
 
- 
   matrix<complex> KM =	km(VhS,VhS);
  
   matrix<complex> M = KM;
@@ -113,21 +123,41 @@ for(int ii=0; ii<nbpt; ii++){// frequency in Hz
   complex[int] UP( VhS.ndof ); UP = 0.; // Solution vector
   UP = M^-1*F;
 
-  for(int n=0; n<VhS.ndof/2; n++){ 
-    u1[](n) = UP[2*n];
-	u2[](n) = UP[2*n+1];
+  for(int n=0; n<VhSs.ndof/2; n++){ 
+	ux1[](n) = UP[2*n];
+	uy2[](n) = UP[2*n+1];
   }
 	   
+  normu = int2d(ThS)(abs(ux1)^2.0)+int2d(ThS)(abs(uy2)^2.0);
 
-  real coef = 0.005/abs(u1[].linfty);
-  mesh Thm = movemesh(ThS, [x+real(u1)*coef-0.05, y+real(u2)*coef]);
-  	
-
-  VhSs u;	
-
-  u=sqrt(abs(u1)^2);
-
-  plot(u,Thm,fill=true,nbiso=20,value=true,wait=false);
+  res << freq(ii) <<"\t" << normu << "\n";
   
 }
 
+
+varf varmm([ux,uy],[uxtest,uytest]) =	 int2d(ThS)(rhoS*(ux*uxtest+uy*uytest)) + on(20,ux=0.,uy=0.); 
+
+varf varkk([ux,uy],[uxtest,uytest]) =	int2d(ThS)((Hooke*e(ux,uy))'*e(uxtest,uytest)) + on(20,ux=0.,uy=0.); 
+
+matrix KK =	varkk(VhS,VhS,solver=Crout,factorize=1,eps=1e-20);
+matrix MM =	varmm(VhS,VhS,solver=CG,eps=1e-20);
+
+int nev=25; 
+real[int] ev(nev);
+VhS[int] [eV,eW](nev);
+
+int k=EigenValue(KK,MM,sym=true,sigma=0,value=ev,vector=eV,tol=1e-10,maxit=0,ncv=0);
+k = min(k,nev);
+
+// Display
+for (int ii=0;ii<nev;ii++){
+	if (sqrt(ev[ii])/(2*pi) > 1){
+		cout << "Mode " << ii << " - " << sqrt(ev[ii])/(2*pi) << " Hz" << endl;
+
+		[ux,uy]=[eV[ii],eW[ii]];
+		real coef = 0.005/abs(ux[].linfty);
+		mesh Thm = movemesh(ThS, [x+real(ux)*coef,y+real(uy)*coef]);
+		plot(Thm, cmm = "Mode "+ii+" - freq = "+ sqrt(ev[ii])/(2*pi) +"Hz",wait=true);
+	}
+}
+//*/

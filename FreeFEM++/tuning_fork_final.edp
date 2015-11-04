@@ -27,30 +27,34 @@
 
 
 // Frequency vector
-int nbpt = 40;
-real fmin = 10, fmax = 5000;
+int nbfrq = 100;
+real fmin = 100, fmax = 600;
 
 // Property of the fluid
 real  rhof = 1.2, cel = 344;
 
-// Property of the tuning fork
+// Property of the tuning fork (Steel)
 real  rhoS = 7800.,
-      E = 210e9,
-      nu = 0.3,
+      E = 200e9,
+      nu = 0.2,
       lambda = (nu*E)/((1+nu)*(1-2*nu)),
       mu = E / (2*(1+nu));
 
 complex eta = 1. + 0.01*1i;      
 
-real nbe = 150; // 
+real nbe = 200; // 
 real nbeF = 50; // 
 
+real normu,normp ;
+
+
 // Dimension of the tuning fork
-real  l1 = 0.05, // Longueur branches
-      l2 = 0.02, // longueur pied
-      d = 0.005, // diamètre
-      r1 = 0.005, // Rayon int.
-      r2 = r1+d; // Rayon ext.
+real  l1 = 0.08, // Length of the branches
+      l2 = 0.03, // length of the foot
+      d =  0.0045, // thickness of the branch
+      r1 = 0.0045, // Internal radius.
+      r2 = r1+d; // External radius.
+      
 
 int[int] reg10 = [0,10], reg20 = [0,20],
                         reg21 = [0,21], //taux
@@ -64,8 +68,8 @@ int[int] reg10 = [0,10], reg20 = [0,20],
 // reg22 : PML with tau_x and tau_x
                         
                         
-real lx = .3, ly = .3; // Dimension of the air cavity
-real lpml = 0.3; // Thickness of the PML
+real lx = .2, ly = .2; // Dimension of the air cavity
+real lpml = 0.2; // Thickness of the PML
 
 border aa(t=0,1){ x=0 ; y=l2*t ; label=1;}
 border bb(t=-pi/2,-pi){ x=r2*cos(t) ; y=r2*sin(t) + l2+r2; label=1;}
@@ -127,7 +131,7 @@ mesh ThPML = ThPML1 + ThPML2 + ThPML3 + ThPML4 + ThPML12 + ThPML23 + ThPML34 + T
 mesh ThF = ThFluide + ThPML;
 
                    
-plot(ThF,ThS,wait=true);
+//plot(ThF,ThS,wait=true);
 
 // Macro
 macro grad(p) [dx(p),dy(p)] //
@@ -139,6 +143,7 @@ macro CISO [ [ lambda+2*mu , lambda , 0],
 fespace VhS(ThS,[P2,P2]);
 fespace VhSs(ThS,P2);
 VhSs<complex> u1,u2;
+VhSs<complex> ux,uy;
 
 fespace VhF(ThF,P2);
 VhF<complex> p;
@@ -154,20 +159,19 @@ Vh0 reg = region;
 complex TAU = 1.*exp(1i*pi/4);
 
 
-real[int] floglin(nbpt);
+real[int] freq(nbfrq);
 {
-//ofstream fre("FREQ.txt");
-for(int ii=0; ii<nbpt; ii++){
-    floglin(ii) = fmin*10^((ii*(log10(fmax)-log10(fmin))/(nbpt-1))); // Répartition log.
-    floglin(ii) = fmin+(ii*((fmax-fmin)/(nbpt-1)));
-    //fre << floglin(ii) << endl;} // Répartition lin.
-    //cout << floglin << endl;
+
+for(int ii=0; ii<nbfrq; ii++){
+    freq(ii) = fmin+(ii*((fmax-fmin)/(nbfrq-1)));
 }
 }
 
-for(int ii=0; ii<nbpt; ii++){// frequency in Hz 
+ofstream res("normu2_PML.txt");
 
-  real omega = 2.*pi*floglin(ii); // pulsation
+for(int ii=0; ii<nbfrq; ii++){// frequency in Hz 
+  cout << "Progress=" << 100*ii/nbfrq << "%" << endl;		
+  real omega = 2.*pi*freq(ii); // pulsation
 
   // Weak form of the solid phase
   varf km([u1,u2],[uk1,uk2]) =	int2d(ThS)(((CISO*e(u1,u2))'*e(uk1,uk2))*eta) // K ok
@@ -175,7 +179,7 @@ for(int ii=0; ii<nbpt; ii++){// frequency in Hz
                     				  	+ on(20,u1=0.,u2=0.); // Encastrement;
   // Weak form of the force
 
-  varf force([u1,u2],[uk1,uk2]) =	int1d(ThS,10)(uk1); // force along x
+  varf force([u1,u2],[uk1,uk2]) =	int1d(ThS,10)(freq(ii)*uk1); // force along x
 
   varf hq(p,pk) =             int2d(ThF,20)(grad(p)'*grad(pk)/rhof/(omega^2.)) //H
                                                  
@@ -205,21 +209,21 @@ for(int ii=0; ii<nbpt; ii++){// frequency in Hz
   UP = M^-1*F;
 
   for(int n=0; n<VhS.ndof/2; n++){ 
-    u1[](n) = UP[2*n];
-	  u2[](n) = UP[2*n+1];
+    ux[](n) = UP[2*n];
+	uy[](n) = UP[2*n+1];
   }
 	   
   for(int n=0; n<VhF.ndof; n++){
 	  p[](n) = UP[VhS.ndof + n];
   }
 
-  real coef = 0.005/abs(u1[].linfty);
-  mesh Thm = movemesh(ThS, [x+real(u1)*coef, y+real(u2)*coef]);
-
   ppw = abs(p);
-  plot(ppw,Thm,fill=true,nbiso=20,value=true,wait=false);
+  plot(ppw,ThS,fill=true,nbiso=20,value=true,wait=false);
 
+  normu = int2d(ThS)(abs(ux)^2.0)+int2d(ThS)(abs(uy)^2.0);
+  normp = int2d(ThF)(abs(p)^2.0);
 
+  res << freq(ii) <<"\t" << normu <<"\t" << normp << "\n";
 
 }
 
