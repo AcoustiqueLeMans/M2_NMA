@@ -129,6 +129,8 @@ if plot_modes==1
             x=[vcor(kconec(ie,1),1) vcor(kconec(ie,2),1) vcor(kconec(ie,3),1)];
             y=[vcor(kconec(ie,1),2) vcor(kconec(ie,2),2) vcor(kconec(ie,3),2)];
             c=[P_modes(kconec(ie,1),nb_mode_plot);P_modes(kconec(ie,2),nb_mode_plot);P_modes(kconec(ie,3),nb_mode_plot)];
+            % determine the color averaging values of vertices (octave compatibility)
+            c = mean(c);
             patch(x,y,abs((c)));
         end
         axis equal
